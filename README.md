@@ -1,4 +1,4 @@
- Reduced-Order Wall Recycling Model for Hydrogen in Fusion Devices
+ Reduced-Order Wall Recycling Model for Hydrogen in Fusion Reactor
 
  Overview
 This repository contains a physics-based reduced-order (0D) model for hydrogen recycling at plasma-facing materials, developed to study global flux balance and wall inventory evolution in magnetic fusion devices.
