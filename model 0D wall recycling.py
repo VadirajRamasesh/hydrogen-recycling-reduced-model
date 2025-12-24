@@ -6,7 +6,6 @@ Reduced Model I tried to create  during Christmas break 2025
 calibrated to WEST pulse 57932 → Genesio et al., Nucl. Fusion 64 026019 (2024)
 shows the exact moment R_eff crosses 0.995 (we lose density control)
 still needs proper multi-zone but good enough for now
-"""
 
 import numpy as np
 from scipy.integrate import solve_ivp
