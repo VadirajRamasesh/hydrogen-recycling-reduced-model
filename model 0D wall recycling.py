@@ -3,8 +3,7 @@ Vadiraj, M.Sc. Hydrogen Technology, TH Rosenheim
 December 2025
 
 Reduced Model I tried to create  during Christmas break 2025
-calibrated to WEST pulse 57932 → Genesio et al., Nucl. Fusion 64 026019 (2024)
-shows the exact moment R_eff crosses 0.995 (we lose density control)
+
 still needs proper multi-zone but good enough for now
 
 import numpy as np
@@ -18,8 +17,8 @@ k_B = 8.617333262145e-5
 class p:
     tau_p  = 3.5          # WEST high-power phase
     tau_0  = 1e-12
-    E_a    = 1.05         # Genesio 2024 best fit
-    R      = 0.992        # WEST 2024 measured
+    E_a    = 1.05         # Representative activation energy consistent with WEST tungsten studies (order ~1 eV)
+    R      = 0.992          # effective baseline recycling coefficient (assumed/tuned for this scenario)
     Nw_max = 1.15e23
     S_in   = 1.2e22
     S_pump = 9e20
@@ -27,7 +26,7 @@ class p:
 
 def get_T_wall(t):
     if t < 50: return p.T0
-    # yeah I know cubic is not ideal but it matches Genesio Fig.7 within 3% so yeah
+    # Simplified temperature ramp to reproduce qualitative thermal-release behavior (demonstration forcing).
     return p.T0 + 820 * ((t-50)/45)**3.1
 
 def get_tau_w(t):
@@ -75,7 +74,7 @@ plt.grid(alpha=0.3)
 plt.subplot(414)
 plt.plot(sol.t, R_eff, 'darkred', lw=2.8)
 plt.axhline(0.995, color='k', ls='--')
-plt.text(102, 0.996, 'density control lost', color='darkred', fontsize=12, weight='bold')
+plt.text(102, 0.996, 'R_eff → 1 (loss of control leverage)', color='darkred', fontsize=12, weight='bold')
 plt.ylabel('$R_{eff}$')
 plt.xlabel('Time [s]')
 plt.ylim(0.985, 1.002)
