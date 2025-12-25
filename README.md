@@ -1,57 +1,35 @@
- Reduced-Order Wall Recycling Model for Hydrogen in Fusion Reactor
+# Reduced-Order Hydrogen Recycling Model (0D)
 
- Overview
- 
-This repository contains a physics-based reduced-order (0D) model for hydrogen recycling at plasma-facing materials, developed to study global flux balance and wall inventory evolution in magnetic fusion devices.
+Minimal reduced-order (0D) model for hydrogen recycling and wall inventory evolution in long-pulse operation.
 
-The model represents the coupled dynamics of plasma particle inventory and wall hydrogen inventory using lumped balance equations, without spatial resolution inside the material.
+## What this is
+A two-state ODE model:
+- `Np(t)` — lumped plasma particle inventory
+- `Nw(t)` — lumped wall inventory
 
- Physical Model
- 
-The model tracks two time-dependent state variables:
-- Plasma hydrogen inventory
-- Wall hydrogen inventory
+Processes represented:
+- external fueling
+- prompt recycling (baseline coefficient `R0`)
+- wall uptake with finite capacity (`Nw_max`)
+- thermally activated wall release via an Arrhenius-type residence time
+- effective exhaust/pumping sink
 
-The governing balances include:
-- Prompt recycling at the plasma–wall interface
-- Wall uptake limited by finite storage capacity
-- Delayed hydrogen release from the wall
-- External fueling and pumping terms
+**Purpose:** qualitative exploration and sensitivity studies (assumptions, time scales, regime transitions).  
+**Not a validated predictive model.**
 
-Wall release is modeled using a temperature-dependent effective residence time with Arrhenius behavior.
+## Interpretation
+The model outputs an effective recycling diagnostic:
 
- Modeling Assumptions
- 
-- Lumped (0D) representation of plasma and wall inventories  
-- Global flux balance governs plasma–wall interaction  
-- Effective wall uptake and release rates (no spatial gradients)  
-- Prescribed plasma exposure and external fueling  
-- No explicit treatment of surface morphology, damage, or trap populations  
+\[
+R_\mathrm{eff} = \frac{\text{prompt return} + \text{thermal release}}{\text{incident flux}}
+\]
 
-The model intentionally avoids spatial resolution and atomistic detail in order to remain transparent and computationally lightweight.
+Any threshold line (e.g., `R_eff = 0.995`) is a **heuristic marker** to visualize approach to near-unity recycling, not a validated operational limit.
 
- Scope and Purpose
- 
-The purpose of this model is to capture dominant system-level hydrogen recycling behavior, such as wall inventory buildup and loss of density control, using minimal physics assumptions.
+## Relationship to WEST / ITER literature
+The plasma inventory balance follows the spirit of global particle balance reasoning used in tokamak long-pulse interpretation (e.g., WEST studies). Wall retention/release is represented by a simplified phenomenological closure to keep the model transparent and lightweight.
 
-It is intended for conceptual analysis, sensitivity studies, and early-stage reasoning prior to the use of higher-fidelity plasma–wall interaction tools.
-
- Reference Case
- 
-Reference discharge context
-
-A representative scenario is implemented for WEST discharge ("pulse") 57932.
-Important: "calibrated to WEST pulse 57932" in this repository means:
-- parameters were tuned here to reproduce reported qualitative features
-  (timing/shape/order-of-magnitude behavior),
-- not that every numeric parameter is directly copied from a single publication.
-
-Parameter provenance rule
-Every parameter must be classified as one of:
-1) physical constant
-2) chosen/assumed for demonstration
-3) fitted in this repository
-4) taken from literature (ONLY if explicitly cited and verifiable)
- Status
-Ongoing academic modeling effort.
+## How to run
+```bash
+python model_0d_recycling.py
 
