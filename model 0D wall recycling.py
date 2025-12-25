@@ -2,17 +2,16 @@
 Reduced-order (0D) hydrogen recycling / wall inventory model.
 
 Scope
-- Minimal two-reservoir ODE system:
+ Minimal two-reservoir ODE system:
     Np(t): lumped plasma particle inventory   [particles]
     Nw(t): lumped wall inventory              [particles]
-- Includes: fueling, prompt recycling, wall uptake with finite capacity,
+ Includes: fueling, prompt recycling, wall uptake with finite capacity,
   and thermally activated wall release via an Arrhenius-type residence time.
-- Intended for qualitative behavior and sensitivity studies (not validation).
+ Intended for qualitative behavior and sensitivity studies (not validation).
 
 Notes
-- Global particle-balance framing is consistent with approaches used to
-  interpret long-pulse tokamak operation (e.g., WEST literature).
-- Wall retention/release is represented by a simplified phenomenological closure.
+Global particle-balance framing is consistent with approaches used to interpret long-pulse tokamak operation (e.g., WEST literature).
+Wall retention/release is represented by a simplified phenomenological closure.
 """
 
 import numpy as np
