@@ -153,7 +153,3 @@ def main() -> None:
     print(f"Final inventories: Np={Np[-1]:.3e}, Nw={Nw[-1]:.3e}")
     print(f"Final R_eff: {R_eff[-1]:.6f}")
 
-
-if __name__ == "__main__":
-    main()
-
