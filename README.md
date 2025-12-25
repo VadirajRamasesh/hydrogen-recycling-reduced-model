@@ -38,11 +38,20 @@ It is intended for conceptual analysis, sensitivity studies, and early-stage rea
 
  Reference Case
  
-The current parameter set is calibrated to WEST discharge conditions reported in:
-Genesio et al., Nuclear Fusion 64 (2024).
+Reference discharge context
 
-This calibration serves as a reference case for evaluating model behavior rather than as a predictive validation.
+A representative scenario is implemented for WEST discharge ("pulse") 57932.
+Important: "calibrated to WEST pulse 57932" in this repository means:
+- parameters were tuned here to reproduce reported qualitative features
+  (timing/shape/order-of-magnitude behavior),
+- not that every numeric parameter is directly copied from a single publication.
 
+Parameter provenance rule
+Every parameter must be classified as one of:
+1) physical constant
+2) chosen/assumed for demonstration
+3) fitted in this repository
+4) taken from literature (ONLY if explicitly cited and verifiable)
  Status
 Ongoing academic modeling effort.
 
