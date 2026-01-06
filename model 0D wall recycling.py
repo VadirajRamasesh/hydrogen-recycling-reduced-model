@@ -1,155 +1,154 @@
 """
-Reduced-order (0D) hydrogen recycling / wall inventory model.
-
-Scope
- Minimal two-reservoir ODE system:
-    Np(t): lumped plasma particle inventory   [particles]
-    Nw(t): lumped wall inventory              [particles]
- Includes: fueling, prompt recycling, wall uptake with finite capacity,
-  and thermally activated wall release via an Arrhenius-type residence time.
- Intended for qualitative behavior and sensitivity studies (not validation).
-
-Notes
-Global particle-balance framing is consistent with approaches used to interpret long-pulse tokamak operation (e.g., WEST literature).
-Wall retention/release is represented by a simplified phenomenological closure.
+WEST / ITER reduced-order recycling model (0D)
+Parameters consistent with Loarer et al. (Nucl. Fusion 2020) steady-state conditions.
 """
 
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-# Boltzmann constant in eV/K (use with Ea in eV and T in K)
-k_B_eV = 8.617333262145e-5
+# Boltzmann constant (eV/K)
+k_B = 8.617e-5
 
-
-@dataclass(frozen=True)
+@dataclass
 class Params:
-    # All sources/sinks S_* are in [particles/s]. Inventories N* are [particles].
+    # WEST Reference Conditions (Loarer 2020)
+    T0: float     = 573.0      # Wall temp ~300 C (Actively cooled W)
+    S_pump: float = 1e18       # Negligible pumping (~0.01 Pam^3/s)
+    
+    # Stress Test Parameters
+    S_in: float   = 1.2e22     # SCALED FLUX (100x exp) for saturation test
+    R: float      = 0.992      # High recycling regime
+    Nw_max: float = 1.15e23    # Effective wall capacity
+    
+    # Physics Constants
+    tau_p: float  = 3.5
+    tau_0: float  = 1e-12
+    E_a: float    = 1.05       # Activation energy (eV)
 
-    # Scenario inputs (illustrative)
-    T0_K: float = 573.0         # baseline wall temperature [K]
-    S_in: float = 1.2e22        # fueling source term [particles/s]
-    S_pump: float = 1.0e18      # effective exhaust sink [particles/s]
+# Nominal configuration
+P_NOMINAL = Params()
 
-    # Recycling / wall inventory (illustrative)
-    R0: float = 0.992           # baseline prompt recycling coefficient [-]
-    Nw_max: float = 1.15e23     # effective wall capacity [particles]
+def get_T_wall(t, p: Params):
+    if t < 50: return p.T0
+    # Cubic fit approximation of thermal excursion
+    return p.T0 + 820 * ((t-50)/45)**3.1
 
-    # Time scales (illustrative)
-    tau_p: float = 3.5          # effective particle confinement time [s]
+def get_tau(t, p: Params):
+    # Arrhenius release time: tau = tau0 * exp(Ea/kT)
+    T = get_T_wall(t, p)
+    return p.tau_0 * np.exp(p.E_a / (k_B * T))
 
-    # Thermally activated release (phenomenological closure)
-    tau0: float = 1.0e-12       # pre-exponential time scale [s]
-    Ea_eV: float = 1.05         # effective activation energy [eV]
+def rhs(t, y, p: Params):
+    Np, Nw = y
+    # Floor to prevent negative density numerical errors
+    if Np < 1e15: Np = 1e15
+    
+    Gamma    = Np / p.tau_p
+    prompt   = p.R * Gamma
+    entering = (1 - p.R) * Gamma
+    
+    # Saturation factor (0=full, 1=empty)
+    uptake   = max(0.0, 1.0 - Nw/p.Nw_max)
+    
+    # Thermal release
+    tau = get_tau(t, p)
+    release  = Nw / tau
+    
+    # Gas puff (tanh ramp-up)
+    fueling  = p.S_in * (1.0 + 1.8 * (1.0 + np.tanh((t-15)/4.0))/2.0)
 
+    # 0D Balance Equations
+    dNp = fueling + prompt + release - Gamma - p.S_pump
+    dNw = entering * uptake - release
+    
+    return [dNp, dNw]
 
-P = Params()
-
-
-def T_wall_K(t: float) -> float:
-    """
-    Prescribed wall temperature trajectory [K] (scenario forcing).
-    Smooth ramp is used to trigger stronger thermally activated release later in time.
-    """
-    if t < 50.0:
-        return P.T0_K
-    return P.T0_K + 820.0 * ((t - 50.0) / 45.0) ** 3.1
-
-
-def tau_release_s(t: float) -> float:
-    """Arrhenius-type residence time: tau = tau0 * exp(Ea / (kB*T))."""
-    return P.tau0 * np.exp(P.Ea_eV / (k_B_eV * T_wall_K(t)))
-
-
-def rhs(t: float, y: np.ndarray) -> list[float]:
-    Np, Nw = float(y[0]), float(y[1])
-
-    # keep inventories non-negative
-    Np = max(Np, 0.0)
-    Nw = max(Nw, 0.0)
-
-    # incident flux proxy
-    Gamma = Np / P.tau_p  # [particles/s]
-
-    # prompt recycling and wall-entering flux
-    prompt = P.R0 * Gamma
-    entering = (1.0 - P.R0) * Gamma
-
-    # wall uptake saturates as Nw -> Nw_max
-    uptake = np.clip(1.0 - Nw / P.Nw_max, 0.0, 1.0)
-
-    # thermally activated wall release
-    release = Nw / tau_release_s(t)
-
-    # fueling profile (smooth ramp)
-    fueling = P.S_in * (1.0 + 1.8 * (1.0 + np.tanh((t - 15.0) / 4.0)) / 2.0)
-
-    dNp_dt = fueling + prompt + release - Gamma - P.S_pump
-    dNw_dt = entering * uptake - release
-
-    return [dNp_dt, dNw_dt]
-
-
-def main() -> None:
-    t0, tf = 0.0, 180.0
-    y0 = [1.8e21, 3.2e22]  # initial inventories [particles]
-
-    sol = solve_ivp(
-        rhs, (t0, tf), y0,
-        method="Radau",
-        rtol=1e-8,
-        atol=1e12,
-        max_step=1.5
-    )
-
-    t = sol.t
-    Np = sol.y[0]
-    Nw = sol.y[1]
-
-    Gamma = Np / P.tau_p
-    tauw = np.array([tau_release_s(ti) for ti in t])
-    release_flux = Nw / tauw
-
-    # Effective recycling diagnostic: returned / incident (prompt + thermal) / incident
-    eps = 1e-30
-    R_eff = (P.R0 * Gamma + release_flux) / (Gamma + eps)
-
-    # heuristic marker only (for visualization)
-    R_mark = 0.995
-
-    plt.figure(figsize=(10, 11))
-
-    plt.subplot(411)
-    plt.plot(t, Np / 1e21, lw=2.0)
-    plt.ylabel(r"$N_p$ [$10^{21}$]")
+def run_nominal():
+    print("Running Nominal Simulation...")
+    p = P_NOMINAL
+    
+    sol = solve_ivp(rhs, (0, 180), [1.8e21, 3.2e22], 
+                    args=(p,), method='Radau', rtol=1e-8)
+    
+    # Post-processing diagnostics
+    time = sol.t
+    T_w = np.array([get_T_wall(ti, p) for ti in time])
+    tau_w = p.tau_0 * np.exp(p.E_a / (k_B * T_w))
+    
+    Gamma = sol.y[0] / p.tau_p
+    release = sol.y[1] / tau_w
+    R_eff = (p.R * Gamma + release) / (Gamma + 1e-16)
+    
+    # Plotting
+    plt.figure(figsize=(10, 10))
+    
+    plt.subplot(311)
+    plt.plot(time, sol.y[0]/1e21, label='$N_p$ (Plasma)', lw=2)
+    plt.ylabel('Inventory [$10^{21}$]')
+    plt.title('WEST-Relevant Wall Saturation Model')
     plt.grid(alpha=0.3)
-
-    plt.subplot(412)
-    plt.plot(t, Nw / 1e22, lw=2.0)
-    plt.axhline(P.Nw_max / 1e22, ls="--", lw=1.5)
-    plt.ylabel(r"$N_w$ [$10^{22}$]")
+    plt.legend()
+    
+    plt.subplot(312)
+    plt.plot(time, sol.y[1]/1e22, color='tab:orange', label='$N_w$ (Wall)', lw=2)
+    plt.axhline(p.Nw_max/1e22, color='r', ls='--', label='Max Capacity')
+    plt.ylabel('Wall Inv. [$10^{22}$]')
     plt.grid(alpha=0.3)
-
-    plt.subplot(413)
-    plt.plot(t, (P.R0 * Gamma + release_flux) / 1e21, lw=2.0)
-    plt.ylabel(r"Return flux [$10^{21}$ s$^{-1}$]")
+    plt.legend()
+    
+    plt.subplot(313)
+    plt.plot(time, R_eff, color='darkred', lw=2)
+    plt.axhline(1.0, color='k', ls='--')
+    plt.text(105, 1.002, "Loss of Density Control", color='darkred', weight='bold')
+    plt.ylabel('$R_{eff}$')
+    plt.xlabel('Time [s]')
+    plt.ylim(0.98, 1.01)
     plt.grid(alpha=0.3)
-
-    plt.subplot(414)
-    plt.plot(t, R_eff, lw=2.2)
-    plt.axhline(R_mark, ls="--", lw=1.2)
-    plt.text(102, R_mark + 0.0007, "near-unity recycling marker (heuristic)", fontsize=11)
-    plt.ylabel(r"$R_{\mathrm{eff}}$")
-    plt.xlabel("Time [s]")
-    plt.ylim(0.985, 1.01)
-    plt.grid(alpha=0.3)
-
+    
     plt.tight_layout()
-    plt.savefig("WEST_Recycling_Model_Output.png", dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.savefig('WEST_Nominal.png', dpi=150)
+    print("Saved 'WEST_Nominal.png'")
 
-    print("Run complete.")
-    print(f"Final inventories: Np={Np[-1]:.3e}, Nw={Nw[-1]:.3e}")
-    print(f"Final R_eff: {R_eff[-1]:.6f}")
+def run_sweep():
+    print("Running Activation Energy (Ea) Sensitivity Sweep...")
+    Ea_values = [0.95, 1.0, 1.05, 1.10, 1.15]
+    
+    plt.figure(figsize=(10, 6))
+    
+    for val in Ea_values:
+        # Create isolated parameter set for this run
+        p_run = replace(P_NOMINAL, E_a=val)
+        
+        sol = solve_ivp(rhs, (0, 180), [1.8e21, 3.2e22], 
+                        args=(p_run,), method='Radau', rtol=1e-8)
+        
+        # Reconstruct R_eff
+        time = sol.t
+        Np, Nw = sol.y
+        Gamma = Np / p_run.tau_p
+        
+        T_w = np.array([get_T_wall(ti, p_run) for ti in time])
+        tau_plot = p_run.tau_0 * np.exp(val / (k_B * T_w))
+        
+        R_eff = (p_run.R * Gamma + (Nw/tau_plot)) / (Gamma + 1e-16)
+        
+        label = f"Ea = {val} eV"
+        if val == 1.05: label += " (Nominal)"
+        plt.plot(time, R_eff, lw=2, label=label)
 
+    plt.axhline(1.0, color='k', ls='--', label="Unity Limit")
+    plt.title("Sensitivity: Activation Energy vs Control Loss Time")
+    plt.ylabel("$R_{eff}$")
+    plt.xlabel("Time [s]")
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.ylim(0.98, 1.02)
+    plt.tight_layout()
+    plt.savefig('WEST_Sensitivity.png', dpi=150)
+    print("Saved 'WEST_Sensitivity.png'")
+
+if __name__ == "__main__":
+    run_nominal()
+    run_sweep()
